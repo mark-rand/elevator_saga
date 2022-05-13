@@ -1,0 +1,126 @@
+{
+    
+    init: function(elevators, floors) {  
+        let MAX_FLOORS=floors.length - 1;
+        let floorUpQueue=[];
+        let floorDownQueue=[];
+        let priorityQueue=[];
+        function calculateNextFloor(elevator, floorUpQueue, floorDownQueue) {
+            const goingUp=1, goingDown=2;
+            upFloors = Array.from(new Set(floorUpQueue.concat(elevator.getPressedFloors()))).sort();
+            downFloors = Array.from(new Set(floorDownQueue.concat(elevator.getPressedFloors()))).sort();
+            floorsAbove=upFloors.filter(function(floorNumber){return floorNumber > elevator.currentFloor()});
+            floorsBelow=downFloors.filter(function(floorNumber){return floorNumber < elevator.currentFloor()});
+            console.log("currentFloor: " + elevator.currentFloor() + " Pressed queue: " + elevator.getPressedFloors());
+            console.log("Up queue: " + floorUpQueue + " Down queue: " + floorDownQueue);
+            console.log("Up floors: " + upFloors + " Down floors: " + downFloors);
+            console.log("Floors above: "+ floorsAbove + " Floors below: " + floorsBelow);
+            
+            direction=goingUp;
+            destination=0;
+            
+            // Work out direction
+            if (elevator.currentFloor() === MAX_FLOORS) {
+                direction=goingDown;
+            } else if (elevator.currentFloor() === 0) {
+                direction=goingUp;
+            } else if (elevator.goingDownIndicator() && floorsBelow.length > 0) {
+                direction=goingDown;
+            } else {
+                direction=goingUp;
+            }
+            
+            if (direction === goingDown) {
+                elevator.goingDownIndicator(true);
+                elevator.goingUpIndicator(false);
+                //if (elevator.loadFactor() > 0.5) {
+                    destination=elevator.getPressedFloors().pop();                    
+                //} 
+                console.log("Going down - picked from pressed floors");
+            } else {
+                elevator.goingUpIndicator(true);
+                elevator.goingDownIndicator(false);
+                //if (elevator.loadFactor() > 0.5) {
+                    destination=elevator.getPressedFloors().pop();                    
+                //} 
+                console.log("Going up - picked from pressed floors");
+            }
+            
+            // todo - remove destination floor from lists
+            console.log("Destination is: " + destination);
+            if (typeof(destination) === "undefined") {
+                console.log("No destination!");
+                if (direction === goingUp && floorUpQueue.length > 0) {
+                    floorUpQueue.sort();
+                    destination=floorUpQueue.shift();
+                } else if (floorDownQueue.length > 0) {
+                    floorDownQueue.sort();
+                    destination=floorDownQueue.pop();
+                } else {
+                    destination=direction === goingDown ? elevator.currentFloor() - 1 : elevator.currentFloor() + 1;
+                }
+            }
+            console.log("Destination: "+destination)
+            elevator.goToFloor(destination);
+            floorUpQueue=floorUpQueue.filter(function(item){return item != destination});
+            floorDownQueue=floorDownQueue.filter(function(item){return item != destination});
+
+        };
+        
+
+        elevators.map(function (elevator, index, floors)  {
+            if (index === 1) { // Up and down, up and down
+                elevator.on("idle", function() {
+                    if (priorityQueue.length > 0) {
+                        destination=priorityQueue.shift();
+                        floorUpQueue=floorUpQueue.filter(function(f){return f != destination});
+                        floorDownQueue=floorDownQueue.filter(function(f){return f != destination});
+                        elevator.goToFloor(destination);
+                    } else if (elevator.getPressedFloors().length > 0) {
+                        elevator.goToFloor(elevator.getPressedFloors()[0]);
+                    } else if (elevator.currentFloor() === MAX_FLOORS) {
+                        elevator.goToFloor(0);
+                    } else {
+                        elevator.goToFloor(elevator.currentFloor()+1);
+                    }
+                });              
+            } else {
+                elevator.on("idle", function() {
+                    console.log("IDLE" + index);
+                    calculateNextFloor(elevator, floorUpQueue, floorDownQueue);
+                });
+
+                elevator.on("stopped_at_floor", function() {
+                    console.log("STOPPED AT FLOOR"+index);
+                    calculateNextFloor(elevator, floorUpQueue, floorDownQueue);
+                });
+
+            }
+        });
+        
+            
+       
+        
+        floors.map(function(floor, elevators) {
+            floor.on("up_button_pressed", function() {
+                if( floorUpQueue.indexOf(floor.floorNum()) === -1 ) {
+                    floorUpQueue.push(floor.floorNum()); 
+                    priorityQueue.push(floor.floorNum());
+                    console.log("Added " + floor.floorNum() + " to up queue");
+                }
+
+            });
+            floor.on("down_button_pressed", function() {
+                if( floorDownQueue.indexOf(floor.floorNum()) === -1 ) {
+                    floorDownQueue.push(floor.floorNum()); 
+                    priorityQueue.push(floor.floorNum());
+                    console.log("Added " + floor.floorNum() + " to down queue");
+                }
+            });
+        });
+        
+    },
+    update: function(dt, elevators, floors) {
+        // We normally don't need to do anything here
+    }
+}
